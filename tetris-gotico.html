@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tetris Gótico</title>
+  <link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0d0b08; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Cinzel', serif; color: #c8b87a; }
+    #game-container { display: flex; gap: 24px; align-items: flex-start; }
+    #canvas-wrapper { display: flex; gap: 12px; align-items: flex-start; }
+    #game-canvas { border: 2px solid #5a4a20; box-shadow: 0 0 30px rgba(180,140,50,0.3); display: block; }
+    #next-panel { background: rgba(20,15,5,0.9); border: 1px solid #5a4a20; padding: 10px; text-align: center; width: 130px; }
+    #next-panel p { font-size: 10px; color: #c8b87a; letter-spacing: 2px; margin-bottom: 8px; text-transform: uppercase; }
+    #next-panel canvas { display: block; margin: 4px auto; border: 1px solid #3a2a10; }
+    #info { width: 155px; display: flex; flex-direction: column; gap: 12px; }
+    #info h1 { font-family: 'UnifrakturMaguntia', cursive; font-size: 36px; color: #c8b87a; text-align: center; text-shadow: 0 0 12px rgba(200,180,100,0.5); }
+    .info-box { background: rgba(20,15,5,0.9); border: 1px solid #5a4a20; padding: 10px; text-align: center; position: relative; }
+    .info-box::before { content: ''; position: absolute; inset: 3px; border: 1px solid rgba(90,74,32,0.3); pointer-events: none; }
+    .info-box p { font-size: 9px; color: #8a7a4a; margin-bottom: 4px; letter-spacing: 3px; text-transform: uppercase; }
+    .info-box span { font-size: 22px; color: #c8b87a; font-weight: bold; }
+    .cheat-box { border-color: #8a6a20 !important; }
+    .cheat-box > p { color: #c8a840 !important; }
+    .cheat-btn { display: block; width: 100%; margin-top: 6px; padding: 6px 4px; background: rgba(10,8,3,0.8); color: #a89860; border: 1px solid #4a3a15; cursor: pointer; font-family: 'Cinzel', serif; font-size: 9px; transition: all 0.2s; letter-spacing: 1px; }
+    .cheat-btn:hover { background: rgba(90,74,32,0.4); color: #c8b87a; }
+    .cheat-btn.active { background: rgba(180,140,50,0.2); border-color: #c8b87a; color: #c8b87a; }
+    #next-canvas { display: block; margin: 0 auto; }
+    #controls p { font-size: 9px; color: #5a4a25; margin-bottom: 4px; letter-spacing: 1px; }
+    #overlay { position: fixed; inset: 0; background: rgba(5,4,2,0.92); display: flex; justify-content: center; align-items: center; }
+    #overlay.hidden { display: none; }
+    #overlay-content { text-align: center; border: 2px solid #5a4a20; padding: 50px 70px; background: rgba(15,12,5,0.97); position: relative; }
+    #overlay-content::before { content: ''; position: absolute; inset: 7px; border: 1px solid rgba(90,74,32,0.4); pointer-events: none; }
+    #overlay-content h2 { font-family: 'UnifrakturMaguntia', cursive; font-size: 56px; color: #c8b87a; text-shadow: 0 0 20px rgba(200,180,100,0.5); margin-bottom: 16px; }
+    #overlay-content p { color: #8a7a4a; font-size: 12px; margin-top: 8px; letter-spacing: 2px; }
+    #final-score { font-size: 20px !important; color: #c8b87a !important; margin-top: 16px !important; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+<div id="game-container">
+  <div id="info">
+    <h1>Tetris</h1>
+    <div class="info-box"><p>Score</p><span id="score">0</span></div>
+    <div class="info-box"><p>Nível</p><span id="level">1</span></div>
+    <div class="info-box"><p>Linhas</p><span id="lines">0</span></div>
+    <div class="info-box"><p>Próxima</p><canvas id="next-canvas" width="120" height="120"></canvas></div>
+    <div class="info-box cheat-box">
+      <p>⚔ Poderes</p>
+      <button onclick="cheatNextPieces()" class="cheat-btn">👁 Ver Próximas (V)</button>
+      <button onclick="cheatFreeze()" class="cheat-btn" id="btn-freeze">⏸ Congelar (F)</button>
+      <button onclick="cheatDeleteLine()" class="cheat-btn">💀 Destruir Linha (D)</button>
+    </div>
+    <div class="info-box"><p>Controles</p><div id="controls"><p>← → Mover</p><p>↑ Girar</p><p>↓ Acelerar</p><p>Space Dropar</p><p>P Pausar</p></div></div>
+  </div>
+  <div id="canvas-wrapper">
+    <canvas id="game-canvas" width="300" height="600"></canvas>
+    <div id="next-panel" class="hidden">
+      <p>Próximas</p>
+      <canvas id="next1" width="120" height="80"></canvas>
+      <canvas id="next2" width="120" height="80"></canvas>
+      <canvas id="next3" width="120" height="80"></canvas>
+    </div>
+  </div>
+</div>
+<div id="overlay">
+  <div id="overlay-content">
+    <h2 id="overlay-title">Tetris</h2>
+    <p id="overlay-msg">Pressione Enter para jogar</p>
+    <p id="final-score"></p>
+  </div>
+</div>
+<script>
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+const nextCanvas = document.getElementById('next-canvas');
+const nextCtx = nextCanvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const overlayTitle = document.getElementById('overlay-title');
+const overlayMsg = document.getElementById('overlay-msg');
+const finalScore = document.getElementById('final-score');
+const COLS=10,ROWS=20,BLOCK=30;
+const HATCH_ANGLES=[null,45,135,45,135,45,135,45];
+const HATCH_GAPS=[null,5,4,6,5,5,6,5];
+const PIECES=[null,[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],[[2,2],[2,2]],[[0,3,0],[3,3,3],[0,0,0]],[[0,4,4],[4,4,0],[0,0,0]],[[5,5,0],[0,5,5],[0,0,0]],[[6,0,0],[6,6,6],[0,0,0]],[[0,0,7],[7,7,7],[0,0,0]]];
+
+// FUNDO GÓTICO EM CÓDIGO
+const bgCanvas=document.createElement('canvas');
+bgCanvas.width=300;bgCanvas.height=600;
+const b=bgCanvas.getContext('2d');
+(function(){
+  const W=300,H=600;
+  b.fillStyle='#c8b484';b.fillRect(0,0,W,H);
+  [[0.1,0.05,80,0.08],[0.8,0.1,60,0.06],[0.3,0.3,100,0.05],[0.7,0.6,90,0.07],[0.2,0.8,70,0.06],[0.9,0.9,50,0.05],[0.5,0.5,120,0.04],[0.15,0.45,55,0.06],[0.85,0.35,65,0.05]].forEach(([rx,ry,r,a])=>{
+    const g=b.createRadialGradient(rx*W,ry*H,0,rx*W,ry*H,r);
+    g.addColorStop(0,`rgba(80,60,20,${a})`);g.addColorStop(1,'rgba(80,60,20,0)');
+    b.fillStyle=g;b.fillRect(0,0,W,H);
+  });
+  b.strokeStyle='rgba(100,80,30,0.06)';b.lineWidth=0.5;
+  for(let y=0;y<H;y+=3){b.beginPath();b.moveTo(0,y);b.lineTo(W,y);b.stroke();}
+  b.strokeStyle='rgba(60,40,10,0.7)';b.lineWidth=3;b.strokeRect(4,4,W-8,H-8);
+  b.strokeStyle='rgba(60,40,10,0.4)';b.lineWidth=1;b.strokeRect(9,9,W-18,H-18);
+  function corner(x,y,sx,sy){
+    b.save();b.translate(x,y);b.scale(sx,sy);
+    b.strokeStyle='rgba(50,35,8,0.75)';b.lineWidth=1.2;
+    b.beginPath();b.moveTo(0,0);b.lineTo(30,0);b.moveTo(0,0);b.lineTo(0,30);b.stroke();
+    b.beginPath();b.arc(30,12,8,Math.PI,Math.PI*1.5);b.stroke();
+    b.beginPath();b.arc(12,30,8,Math.PI*1.5,Math.PI*2);b.stroke();
+    b.beginPath();b.arc(6,6,4,0,Math.PI*2);b.stroke();
+    b.restore();
+  }
+  corner(9,9,1,1);corner(W-9,9,-1,1);corner(9,H-9,1,-1);corner(W-9,H-9,-1,-1);
+  // Cruz com asas
+  const cx=150,cy=48;
+  b.strokeStyle='rgba(40,28,6,0.7)';b.lineWidth=1.5;
+  b.beginPath();b.moveTo(cx,cy-22);b.lineTo(cx,cy+18);b.stroke();
+  b.beginPath();b.moveTo(cx-13,cy-6);b.lineTo(cx+13,cy-6);b.stroke();
+  b.beginPath();b.moveTo(cx-13,cy-6);b.bezierCurveTo(cx-32,cy-16,cx-42,cy-8,cx-28,cy-2);b.bezierCurveTo(cx-20,cy+2,cx-15,cy-2,cx-13,cy-6);b.stroke();
+  b.beginPath();b.moveTo(cx+13,cy-6);b.bezierCurveTo(cx+32,cy-16,cx+42,cy-8,cx+28,cy-2);b.bezierCurveTo(cx+20,cy+2,cx+15,cy-2,cx+13,cy-6);b.stroke();
+  // Rosa
+  const rx=55,ry=H-175,rr=26;
+  b.strokeStyle='rgba(40,28,6,0.65)';b.lineWidth=1;
+  b.beginPath();b.moveTo(rx,ry+rr);b.bezierCurveTo(rx-10,ry+rr+40,rx-18,ry+rr+80,rx-14,ry+rr+120);b.stroke();
+  [[rx-8,ry+rr+28,rx-28,ry+rr+18,rx-5,ry+rr+44],[rx-11,ry+rr+62,rx-32,ry+rr+52,rx-7,ry+rr+78]].forEach(([x1,y1,x2,y2,x3,y3])=>{
+    b.beginPath();b.moveTo(x1,y1);b.quadraticCurveTo(x2,y2,x3,y3);b.quadraticCurveTo(x1+5,y1+10,x1,y1);
+    b.fillStyle='rgba(40,28,6,0.1)';b.fill();b.stroke();
+  });
+  for(let i=0;i<7;i++){
+    const a=(i/7)*Math.PI*2,px=rx+Math.cos(a)*rr*0.6,py=ry+Math.sin(a)*rr*0.6;
+    b.beginPath();b.ellipse(px,py,rr*0.45,rr*0.3,a,0,Math.PI*2);
+    b.fillStyle='rgba(40,28,6,0.12)';b.fill();b.stroke();
+  }
+  b.beginPath();b.arc(rx,ry,rr*0.3,0,Math.PI*2);b.fillStyle='rgba(40,28,6,0.25)';b.fill();b.stroke();
+  // Texto manuscrito
+  b.font='italic 9px serif';b.fillStyle='rgba(50,35,8,0.18)';
+  b.save();b.translate(18,H-58);b.rotate(-0.04);
+  b.fillText('In nomine...',0,0);b.fillText('...aeternum...',8,13);b.fillText('...gloria...',4,26);
+  b.restore();
+  // Vignette
+  const vg=b.createRadialGradient(W/2,H/2,H*0.28,W/2,H/2,H*0.72);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,0.38)');
+  b.fillStyle=vg;b.fillRect(0,0,W,H);
+})();
+
+let board,score,level,lines,piece,nextPieces,gameOver,paused,frozen,animId,dropInterval,lastTime;
+function createBoard(){return Array.from({length:ROWS},()=>Array(COLS).fill(0));}
+function randomPiece(){const id=Math.floor(Math.random()*7)+1;const matrix=PIECES[id].map(r=>[...r]);return{matrix,x:Math.floor(COLS/2)-Math.floor(matrix[0].length/2),y:0,id};}
+function isValid(mat,ox,oy){for(let r=0;r<mat.length;r++)for(let c=0;c<mat[r].length;c++)if(mat[r][c]){const nx=ox+c,ny=oy+r;if(nx<0||nx>=COLS||ny>=ROWS)return false;if(ny>=0&&board[ny][nx])return false;}return true;}
+function rotate(mat){return mat[0].map((_,i)=>mat.map(r=>r[i]).reverse());}
+function lock(){piece.matrix.forEach((r,ri)=>r.forEach((v,ci)=>{if(v&&piece.y+ri>=0)board[piece.y+ri][piece.x+ci]=v;}));clearLines();piece=nextPieces.shift();nextPieces.push(randomPiece());if(!isValid(piece.matrix,piece.x,piece.y))endGame();}
+function clearLines(){let cleared=0;for(let r=ROWS-1;r>=0;r--){if(board[r].every(v=>v)){board.splice(r,1);board.unshift(Array(COLS).fill(0));cleared++;r++;}}if(cleared){const pts=[0,100,300,500,800];score+=(pts[cleared]||800)*level;lines+=cleared;level=Math.floor(lines/10)+1;dropInterval=Math.max(100,1000-(level-1)*90);updateUI();}}
+function updateUI(){document.getElementById('score').textContent=score;document.getElementById('level').textContent=level;document.getElementById('lines').textContent=lines;}
+function drawHandBlock(context,x,y,colorId,size,alpha){size=size||BLOCK;alpha=alpha===undefined?1:alpha;const px=x*size,py=y*size,pad=2;context.save();context.globalAlpha=alpha;context.fillStyle='#d4c4a0';context.fillRect(px+pad,py+pad,size-pad*2,size-pad*2);context.beginPath();context.rect(px+pad,py+pad,size-pad*2,size-pad*2);context.clip();const angle=HATCH_ANGLES[colorId]||45,gap=HATCH_GAPS[colorId]||5,rad=angle*Math.PI/180,cos=Math.cos(rad),sin=Math.sin(rad),diag=size*2;context.strokeStyle='#1a1005';context.lineWidth=1.2;context.globalAlpha=alpha*0.85;for(let i=-diag;i<diag;i+=gap){context.beginPath();context.moveTo(px+size/2+i*cos-diag*sin,py+size/2+i*sin+diag*cos);context.lineTo(px+size/2+i*cos+diag*sin,py+size/2+i*sin-diag*cos);context.stroke();}if(colorId%2===0){const r2=rad+Math.PI/2,c2=Math.cos(r2),s2=Math.sin(r2);context.globalAlpha=alpha*0.3;for(let i=-diag;i<diag;i+=gap*1.6){context.beginPath();context.moveTo(px+size/2+i*c2-diag*s2,py+size/2+i*s2+diag*c2);context.lineTo(px+size/2+i*c2+diag*s2,py+size/2+i*s2-diag*c2);context.stroke();}}context.restore();context.save();context.globalAlpha=alpha;context.strokeStyle='#0d0a05';context.lineWidth=2;context.lineJoin='round';context.strokeRect(px+pad,py+pad,size-pad*2,size-pad*2);context.restore();}
+function drawGhost(){let gy=piece.y;while(isValid(piece.matrix,piece.x,gy+1))gy++;piece.matrix.forEach((r,ri)=>r.forEach((v,ci)=>{if(v)drawHandBlock(ctx,piece.x+ci,gy+ri,piece.id,BLOCK,0.18);}));}
+function drawMini(context,mat,colorId,cw,ch){const s=20;context.clearRect(0,0,cw,ch);const ox=Math.floor((cw/s-mat[0].length)/2),oy=Math.floor((ch/s-mat.length)/2);mat.forEach((r,ri)=>r.forEach((v,ci)=>{if(v)drawHandBlock(context,ox+ci,oy+ri,colorId,s);}));}
+function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.save();ctx.globalAlpha=0.75;ctx.drawImage(bgCanvas,0,0);ctx.restore();ctx.strokeStyle='rgba(80,60,20,0.12)';ctx.lineWidth=0.5;for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)ctx.strokeRect(c*BLOCK,r*BLOCK,BLOCK,BLOCK);board.forEach((row,r)=>row.forEach((v,c)=>{if(v)drawHandBlock(ctx,c,r,v);}));drawGhost();piece.matrix.forEach((r,ri)=>r.forEach((v,ci)=>{if(v)drawHandBlock(ctx,piece.x+ci,piece.y+ri,v);}));if(frozen){ctx.strokeStyle='rgba(200,180,100,0.8)';ctx.lineWidth=3;ctx.strokeRect(2,2,canvas.width-4,canvas.height-4);}drawMini(nextCtx,nextPieces[0].matrix,nextPieces[0].id,120,120);['next1','next2','next3'].forEach((id,i)=>{const c=document.getElementById(id);if(c)drawMini(c.getContext('2d'),nextPieces[i].matrix,nextPieces[i].id,120,80);});}
+function gameLoop(time){time=time||0;if(!paused&&!gameOver){const delta=time-lastTime;if(!frozen&&delta>dropInterval){if(isValid(piece.matrix,piece.x,piece.y+1))piece.y++;else lock();lastTime=time;}draw();}animId=requestAnimationFrame(gameLoop);}
+function startGame(){board=createBoard();score=0;level=1;lines=0;dropInterval=1000;lastTime=0;gameOver=false;paused=false;frozen=false;nextPieces=[randomPiece(),randomPiece(),randomPiece(),randomPiece()];piece=nextPieces.shift();updateUI();overlay.classList.add('hidden');cancelAnimationFrame(animId);animId=requestAnimationFrame(gameLoop);}
+function endGame(){gameOver=true;overlayTitle.textContent='Fim';overlayMsg.textContent='Pressione Enter para jogar de novo';finalScore.textContent='Score: '+score;overlay.classList.remove('hidden');}
+function cheatNextPieces(){document.getElementById('next-panel').classList.toggle('hidden');}
+function cheatFreeze(){if(frozen)return;frozen=true;lastTime=performance.now();const btn=document.getElementById('btn-freeze');btn.classList.add('active');btn.textContent='⏸ CONGELADO! (5s)';setTimeout(()=>{frozen=false;lastTime=performance.now();btn.classList.remove('active');btn.textContent='⏸ Congelar (F)';},5000);}
+function cheatDeleteLine(){for(let r=ROWS-1;r>=0;r--){if(board[r].some(v=>v)){board.splice(r,1);board.unshift(Array(COLS).fill(0));break;}}}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'){startGame();return;}if(gameOver)return;if(e.key==='v'||e.key==='V'){cheatNextPieces();return;}if(e.key==='f'||e.key==='F'){cheatFreeze();return;}if(e.key==='d'||e.key==='D'){cheatDeleteLine();return;}if(e.key==='p'||e.key==='P'){paused=!paused;if(!paused)lastTime=performance.now();return;}if(paused)return;switch(e.key){case'ArrowLeft':if(isValid(piece.matrix,piece.x-1,piece.y))piece.x--;break;case'ArrowRight':if(isValid(piece.matrix,piece.x+1,piece.y))piece.x++;break;case'ArrowDown':if(isValid(piece.matrix,piece.x,piece.y+1))piece.y++;else lock();break;case'ArrowUp':const rot=rotate(piece.matrix);if(isValid(rot,piece.x,piece.y))piece.matrix=rot;break;case' ':while(isValid(piece.matrix,piece.x,piece.y+1))piece.y++;lock();break;}draw();});
+overlayTitle.textContent='Tetris';overlayMsg.textContent='Pressione Enter para jogar';finalScore.textContent='';
+</script>
+</body>
+</html>
